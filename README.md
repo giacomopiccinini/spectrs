@@ -1,0 +1,2 @@
+# spectrs
+Parallelized spectrogram generation
