@@ -1,0 +1,11 @@
+[package]
+name = "spectrs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+hound = "3.5.1"
+num = "0.4.3"
+rayon = "1.11.0"
+rustfft = "6.4.1"
