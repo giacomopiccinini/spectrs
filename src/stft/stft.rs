@@ -19,7 +19,7 @@ fn create_hann_window(length: usize) -> Vec<f32> {
 /// win_length: number of samples in the window function applied before FFT
 /// Pad with zeros if needed. This is because usually win_length < n_samples
 /// and the missing are just zeros (in this case complex zeros)
-fn par_compute_stft(
+pub fn par_compute_stft(
     audio: &[f32],
     n_samples: usize,
     hop_length: usize,
