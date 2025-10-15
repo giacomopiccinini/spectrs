@@ -25,7 +25,7 @@ pub fn cleanup_test_dir(test_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Create sample wav file
+/// Create sample wav file with a simple sine wave
 pub fn create_test_wav(
     path: &Path,
     duration_sec: f32,
@@ -58,7 +58,56 @@ pub fn create_test_wav(
                     return Err(anyhow::anyhow!(
                         "Unsupported bits per sample: {}",
                         bits_per_sample
-                    ))
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Create a more complex test wav file with multiple frequencies for better spectrogram testing
+pub fn create_complex_test_wav(
+    path: &Path,
+    duration_sec: f32,
+    sample_rate: u32,
+    channels: usize,
+    bits_per_sample: u16,
+) -> Result<()> {
+    use hound::{WavSpec, WavWriter};
+
+    let spec = WavSpec {
+        channels: channels as u16,
+        sample_rate,
+        bits_per_sample,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut writer = WavWriter::create(path, spec)?;
+    let num_samples = (duration_sec * sample_rate as f32) as u32;
+
+    // Multiple frequency components for richer spectrogram
+    let frequencies = [220.0, 440.0, 880.0, 1320.0]; // A3, A4, A5, E6
+
+    for t in 0..num_samples {
+        let mut sample = 0.0;
+        for (i, &freq) in frequencies.iter().enumerate() {
+            let amplitude = 0.25 / (i + 1) as f32; // Decreasing amplitude
+            sample += amplitude
+                * (t as f32 * freq * 2.0 * std::f32::consts::PI / sample_rate as f32).sin();
+        }
+
+        // Write sample for each channel
+        for _ in 0..channels {
+            match bits_per_sample {
+                8 => writer.write_sample((sample * i8::MAX as f32) as i8)?,
+                16 => writer.write_sample((sample * i16::MAX as f32) as i16)?,
+                32 => writer.write_sample((sample * i32::MAX as f32) as i32)?,
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Unsupported bits per sample: {}",
+                        bits_per_sample
+                    ));
                 }
             }
         }
