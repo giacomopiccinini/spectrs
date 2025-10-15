@@ -146,7 +146,7 @@ fn create_mel_filter_bank(
 
 /// Apply Mel filters to an already created spectrogram
 pub fn convert_to_mel(
-    spectrogram: &Vec<Vec<f32>>,
+    spectrogram: &[Vec<f32>],
     sr: u32,
     n_fft: usize,
     n_mels: usize,
