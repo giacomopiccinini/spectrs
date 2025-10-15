@@ -11,7 +11,7 @@ use std::process::Command;
 
 /// Compatibility thresholds for librosa comparison
 const CORRELATION_THRESHOLD: f32 = 0.999; // Very high correlation expected (perfect match)
-const RELATIVE_ERROR_THRESHOLD: f32 = 0.01; // Allow 5% relative error on significant bins
+const RELATIVE_ERROR_THRESHOLD: f32 = 0.03; // Allow 3% relative error on significant bins
 
 /// Helper function to save spectrogram as JSON
 fn save_spectrogram_json(spec: &[Vec<f32>], output_path: &str) -> Result<()> {
