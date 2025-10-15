@@ -67,6 +67,7 @@ pub fn create_test_wav(
 }
 
 /// Create a more complex test wav file with multiple frequencies for better spectrogram testing
+#[allow(dead_code)]
 pub fn create_complex_test_wav(
     path: &Path,
     duration_sec: f32,

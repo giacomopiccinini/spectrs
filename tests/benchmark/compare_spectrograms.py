@@ -13,85 +13,118 @@ import sys
 import json
 import numpy as np
 
+
 def load_spectrogram(json_file: str) -> np.ndarray:
     """Load spectrogram from JSON file."""
-    with open(json_file, 'r') as f:
+    with open(json_file, "r") as f:
         data = json.load(f)
-    return np.array(data['data'])
+    return np.array(data["data"])
+
+
+def trim_to_common_shape(
+    spec1: np.ndarray, spec2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Trim two spectrograms to common 2D shape before flattening."""
+    min_freq = min(spec1.shape[0], spec2.shape[0])
+    min_time = min(spec1.shape[1], spec2.shape[1])
+    return spec1[:min_freq, :min_time], spec2[:min_freq, :min_time]
+
 
 def compute_correlation(spec1: np.ndarray, spec2: np.ndarray) -> float:
     """Compute correlation coefficient between two spectrograms."""
+    # Trim to common shape BEFORE flattening to avoid misalignment
+    spec1, spec2 = trim_to_common_shape(spec1, spec2)
     flat1 = spec1.flatten()
     flat2 = spec2.flatten()
-    
-    if flat1.shape != flat2.shape:
-        # Trim to common shape
-        min_len = min(len(flat1), len(flat2))
-        flat1 = flat1[:min_len]
-        flat2 = flat2[:min_len]
-    
+
     correlation = np.corrcoef(flat1, flat2)[0, 1]
     return correlation
 
+
 def compute_relative_error(spec1: np.ndarray, spec2: np.ndarray) -> float:
-    """Compute mean relative error between two spectrograms."""
+    """Compute mean relative error between two spectrograms.
+
+    Only computes relative error for bins with significant energy to avoid
+    division by near-zero values which inflates the metric.
+    """
+    # Trim to common shape BEFORE flattening to avoid misalignment
+    spec1, spec2 = trim_to_common_shape(spec1, spec2)
     flat1 = spec1.flatten()
     flat2 = spec2.flatten()
-    
-    if flat1.shape != flat2.shape:
-        # Trim to common shape
-        min_len = min(len(flat1), len(flat2))
-        flat1 = flat1[:min_len]
-        flat2 = flat2[:min_len]
-    
-    relative_error = np.mean(np.abs(flat1 - flat2) / (np.abs(flat2) + 1e-10))
+
+    # Only compute relative error where reference has significant energy
+    # Use threshold of 1% of max value
+    threshold = 0.01 * np.max(flat2)
+    mask = flat2 > threshold
+
+    if np.sum(mask) > 0:
+        relative_error = np.mean(np.abs(flat1[mask] - flat2[mask]) / flat2[mask])
+    else:
+        # If no significant bins, use regular relative error
+        relative_error = np.mean(np.abs(flat1 - flat2) / (np.abs(flat2) + 1e-8))
+
     return relative_error
+
+
+def compute_normalized_rmse(spec1: np.ndarray, spec2: np.ndarray) -> float:
+    """Compute normalized RMSE (RMSE / mean of reference)."""
+    # Trim to common shape BEFORE flattening
+    spec1, spec2 = trim_to_common_shape(spec1, spec2)
+    flat1 = spec1.flatten()
+    flat2 = spec2.flatten()
+
+    rmse = np.sqrt(np.mean((flat1 - flat2) ** 2))
+    mean_ref = np.mean(flat2)
+
+    return rmse / mean_ref if mean_ref > 0 else float("inf")
+
 
 def compute_rmse(spec1: np.ndarray, spec2: np.ndarray) -> float:
     """Compute root mean squared error between two spectrograms."""
+    # Trim to common shape BEFORE flattening to avoid misalignment
+    spec1, spec2 = trim_to_common_shape(spec1, spec2)
     flat1 = spec1.flatten()
     flat2 = spec2.flatten()
-    
-    if flat1.shape != flat2.shape:
-        # Trim to common shape
-        min_len = min(len(flat1), len(flat2))
-        flat1 = flat1[:min_len]
-        flat2 = flat2[:min_len]
-    
+
     rmse = np.sqrt(np.mean((flat1 - flat2) ** 2))
     return rmse
 
+
 def main():
     if len(sys.argv) < 4:
-        print("Usage: python compare_spectrograms.py <spectrs_json> <librosa_json> <output_json>")
+        print(
+            "Usage: python compare_spectrograms.py <spectrs_json> <librosa_json> <output_json>"
+        )
         sys.exit(1)
-    
+
     spectrs_file = sys.argv[1]
     librosa_file = sys.argv[2]
     output_file = sys.argv[3]
-    
+
     # Load spectrograms
     spectrs_spec = load_spectrogram(spectrs_file)
     librosa_spec = load_spectrogram(librosa_file)
-    
+
     print(f"Spectrs shape: {spectrs_spec.shape}")
     print(f"Librosa shape: {librosa_spec.shape}")
-    
+
     # Compute metrics
     correlation = compute_correlation(spectrs_spec, librosa_spec)
     relative_error = compute_relative_error(spectrs_spec, librosa_spec)
     rmse = compute_rmse(spectrs_spec, librosa_spec)
-    
+    normalized_rmse = compute_normalized_rmse(spectrs_spec, librosa_spec)
+
     # Compute statistics
     spectrs_mean = float(np.mean(spectrs_spec))
     spectrs_std = float(np.std(spectrs_spec))
     librosa_mean = float(np.mean(librosa_spec))
     librosa_std = float(np.std(librosa_spec))
-    
+
     results = {
         "correlation": float(correlation),
         "relative_error": float(relative_error),
         "rmse": float(rmse),
+        "normalized_rmse": float(normalized_rmse),
         "spectrs_stats": {
             "mean": spectrs_mean,
             "std": spectrs_std,
@@ -103,20 +136,21 @@ def main():
         "shapes": {
             "spectrs": list(spectrs_spec.shape),
             "librosa": list(librosa_spec.shape),
-        }
+        },
     }
-    
+
     # Save results
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
-    
+
     # Print results
     print(f"\nComparison Results:")
     print(f"  Correlation: {correlation:.6f}")
     print(f"  Relative Error: {relative_error:.6f}")
     print(f"  RMSE: {rmse:.6f}")
+    print(f"  Normalized RMSE: {normalized_rmse:.6f}")
     print(f"\nResults saved to {output_file}")
+
 
 if __name__ == "__main__":
     main()
-

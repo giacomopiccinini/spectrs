@@ -10,8 +10,8 @@ use std::fs;
 use std::process::Command;
 
 /// Compatibility thresholds for librosa comparison
-const CORRELATION_THRESHOLD: f32 = 0.95; // High correlation expected
-const RELATIVE_ERROR_THRESHOLD: f32 = 0.15; // Allow 15% relative error
+const CORRELATION_THRESHOLD: f32 = 0.999; // Very high correlation expected (perfect match)
+const RELATIVE_ERROR_THRESHOLD: f32 = 0.01; // Allow 5% relative error on significant bins
 
 /// Helper function to save spectrogram as JSON
 fn save_spectrogram_json(spec: &[Vec<f32>], output_path: &str) -> Result<()> {
@@ -49,25 +49,53 @@ fn compare_with_librosa(
     spectrs_json: &str,
     librosa_json: &str,
     comparison_json: &str,
-) -> Result<(f32, f32)> {
+    test_name: &str,
+) -> Result<(f32, f32, bool)> {
     // Run comparison script
     run_python_script(
         "tests/benchmark/compare_spectrograms.py",
         &[spectrs_json, librosa_json, comparison_json],
     )?;
-
+    
     // Load comparison results
     let results_str = fs::read_to_string(comparison_json)?;
     let results: Value = serde_json::from_str(&results_str)?;
-
+    
     let correlation = results["correlation"].as_f64().unwrap() as f32;
     let relative_error = results["relative_error"].as_f64().unwrap() as f32;
-
-    Ok((correlation, relative_error))
+    let normalized_rmse = results["normalized_rmse"].as_f64().unwrap_or(0.0) as f32;
+    
+    // Check if test passes
+    let passes = correlation >= CORRELATION_THRESHOLD && relative_error <= RELATIVE_ERROR_THRESHOLD;
+    
+    // Save visualization if test fails
+    if !passes {
+        let viz_path = std::path::Path::new(spectrs_json)
+            .parent()
+            .unwrap()
+            .join(format!("{}_comparison.png", test_name));
+        
+        eprintln!("\nTest {} FAILED:", test_name);
+        eprintln!("  Correlation: {:.6} (threshold: {:.6})", correlation, CORRELATION_THRESHOLD);
+        eprintln!("  Relative Error: {:.6} (threshold: {:.6})", relative_error, RELATIVE_ERROR_THRESHOLD);
+        eprintln!("  Normalized RMSE: {:.6}", normalized_rmse);
+        
+        // Generate visualization
+        if let Err(e) = run_python_script(
+            "tests/benchmark/debug_comparison.py",
+            &[spectrs_json, librosa_json, viz_path.to_str().unwrap()],
+        ) {
+            eprintln!("  Warning: Could not generate visualization: {}", e);
+        } else {
+            eprintln!("  Visualization saved to: {}", viz_path.display());
+        }
+        eprintln!("  Test data preserved in: {}", std::path::Path::new(spectrs_json).parent().unwrap().display());
+    }
+    
+    Ok((correlation, relative_error, passes))
 }
 
 #[test]
-#[ignore] // Ignore by default as it requires Python/librosa
 fn test_stft_compatibility_basic() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_stft.wav");
@@ -109,10 +137,11 @@ fn test_stft_compatibility_basic() -> Result<()> {
 
     // Compare
     let comparison_json = test_dir.join("comparison.json");
-    let (correlation, relative_error) = compare_with_librosa(
+    let (correlation, relative_error, passes) = compare_with_librosa(
         spectrs_json.to_str().unwrap(),
         librosa_json.to_str().unwrap(),
         comparison_json.to_str().unwrap(),
+        "stft_basic",
     )?;
 
     println!(
@@ -120,25 +149,16 @@ fn test_stft_compatibility_basic() -> Result<()> {
         correlation, relative_error
     );
 
-    assert!(
-        correlation >= CORRELATION_THRESHOLD,
-        "Correlation {:.4} below threshold {:.4}",
-        correlation,
-        CORRELATION_THRESHOLD
-    );
-    assert!(
-        relative_error <= RELATIVE_ERROR_THRESHOLD,
-        "Relative error {:.4} above threshold {:.4}",
-        relative_error,
-        RELATIVE_ERROR_THRESHOLD
-    );
-
-    cleanup_test_dir(&test_dir)?;
+    // Only cleanup if test passes
+    if passes {
+        cleanup_test_dir(&test_dir)?;
+    }
+    
+    assert!(passes, "Librosa compatibility test failed - check visualization");
     Ok(())
 }
 
 #[test]
-#[ignore]
 fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_fft.wav");
@@ -191,10 +211,11 @@ fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
 
         // Compare
         let comparison_json = test_dir.join(format!("comparison_{}.json", n_fft));
-        let (correlation, relative_error) = compare_with_librosa(
+        let (correlation, relative_error, passes) = compare_with_librosa(
             spectrs_json.to_str().unwrap(),
             librosa_json.to_str().unwrap(),
             comparison_json.to_str().unwrap(),
+            &format!("stft_fft{}", n_fft),
         )?;
 
         println!(
@@ -202,8 +223,10 @@ fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
             n_fft, correlation, relative_error
         );
 
-        assert!(correlation >= CORRELATION_THRESHOLD);
-        assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
+        if !passes {
+            // Don't cleanup test_dir on failure
+            assert!(passes, "Librosa compatibility test failed for n_fft={} - check visualization", n_fft);
+        }
     }
 
     cleanup_test_dir(&test_dir)?;
@@ -211,7 +234,6 @@ fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
 }
 
 #[test]
-#[ignore]
 fn test_mel_compatibility_htk() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_mel.wav");
@@ -256,10 +278,11 @@ fn test_mel_compatibility_htk() -> Result<()> {
 
     // Compare
     let comparison_json = test_dir.join("comparison_mel.json");
-    let (correlation, relative_error) = compare_with_librosa(
+    let (correlation, relative_error, passes) = compare_with_librosa(
         spectrs_json.to_str().unwrap(),
         librosa_json.to_str().unwrap(),
         comparison_json.to_str().unwrap(),
+        "mel_htk",
     )?;
 
     println!(
@@ -267,15 +290,14 @@ fn test_mel_compatibility_htk() -> Result<()> {
         correlation, relative_error
     );
 
-    assert!(correlation >= CORRELATION_THRESHOLD);
-    assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
-
-    cleanup_test_dir(&test_dir)?;
+    if passes {
+        cleanup_test_dir(&test_dir)?;
+    }
+    assert!(passes, "Librosa compatibility test failed - check visualization");
     Ok(())
 }
 
 #[test]
-#[ignore]
 fn test_mel_compatibility_different_n_mels() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_nmels.wav");
@@ -323,10 +345,11 @@ fn test_mel_compatibility_different_n_mels() -> Result<()> {
 
         // Compare
         let comparison_json = test_dir.join(format!("comparison_mel_{}.json", n_mels));
-        let (correlation, relative_error) = compare_with_librosa(
+        let (correlation, relative_error, passes) = compare_with_librosa(
             spectrs_json.to_str().unwrap(),
             librosa_json.to_str().unwrap(),
             comparison_json.to_str().unwrap(),
+            &format!("mel_nmels{}", n_mels),
         )?;
 
         println!(
@@ -334,8 +357,9 @@ fn test_mel_compatibility_different_n_mels() -> Result<()> {
             n_mels, correlation, relative_error
         );
 
-        assert!(correlation >= CORRELATION_THRESHOLD);
-        assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
+        if !passes {
+            assert!(passes, "Librosa compatibility test failed for n_mels={} - check visualization", n_mels);
+        }
     }
 
     cleanup_test_dir(&test_dir)?;
@@ -343,7 +367,6 @@ fn test_mel_compatibility_different_n_mels() -> Result<()> {
 }
 
 #[test]
-#[ignore]
 fn test_mel_compatibility_slaney() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_slaney.wav");
@@ -388,10 +411,11 @@ fn test_mel_compatibility_slaney() -> Result<()> {
 
     // Compare
     let comparison_json = test_dir.join("comparison_mel_slaney.json");
-    let (correlation, relative_error) = compare_with_librosa(
+    let (correlation, relative_error, passes) = compare_with_librosa(
         spectrs_json.to_str().unwrap(),
         librosa_json.to_str().unwrap(),
         comparison_json.to_str().unwrap(),
+        "mel_slaney",
     )?;
 
     println!(
@@ -399,15 +423,14 @@ fn test_mel_compatibility_slaney() -> Result<()> {
         correlation, relative_error
     );
 
-    assert!(correlation >= CORRELATION_THRESHOLD);
-    assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
-
-    cleanup_test_dir(&test_dir)?;
+    if passes {
+        cleanup_test_dir(&test_dir)?;
+    }
+    assert!(passes, "Librosa compatibility test failed - check visualization");
     Ok(())
 }
 
 #[test]
-#[ignore]
 fn test_compatibility_complex_signal() -> Result<()> {
     let test_dir = setup_test_dir()?;
     let audio_path = test_dir.join("test_librosa_complex.wav");
@@ -452,10 +475,11 @@ fn test_compatibility_complex_signal() -> Result<()> {
 
     // Compare
     let comparison_json = test_dir.join("comparison_complex.json");
-    let (correlation, relative_error) = compare_with_librosa(
+    let (correlation, relative_error, passes) = compare_with_librosa(
         spectrs_json.to_str().unwrap(),
         librosa_json.to_str().unwrap(),
         comparison_json.to_str().unwrap(),
+        "complex_signal",
     )?;
 
     println!(
@@ -463,15 +487,14 @@ fn test_compatibility_complex_signal() -> Result<()> {
         correlation, relative_error
     );
 
-    assert!(correlation >= CORRELATION_THRESHOLD);
-    assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
-
-    cleanup_test_dir(&test_dir)?;
+    if passes {
+        cleanup_test_dir(&test_dir)?;
+    }
+    assert!(passes, "Librosa compatibility test failed - check visualization");
     Ok(())
 }
 
 #[test]
-#[ignore]
 fn test_compatibility_different_sample_rates() -> Result<()> {
     let test_dir = setup_test_dir()?;
 
@@ -519,10 +542,11 @@ fn test_compatibility_different_sample_rates() -> Result<()> {
 
         // Compare
         let comparison_json = test_dir.join(format!("comparison_sr_{}.json", sr));
-        let (correlation, relative_error) = compare_with_librosa(
+        let (correlation, relative_error, passes) = compare_with_librosa(
             spectrs_json.to_str().unwrap(),
             librosa_json.to_str().unwrap(),
             comparison_json.to_str().unwrap(),
+            &format!("sr{}", sr),
         )?;
 
         println!(
@@ -530,8 +554,9 @@ fn test_compatibility_different_sample_rates() -> Result<()> {
             sr, correlation, relative_error
         );
 
-        assert!(correlation >= CORRELATION_THRESHOLD);
-        assert!(relative_error <= RELATIVE_ERROR_THRESHOLD);
+        if !passes {
+            assert!(passes, "Librosa compatibility test failed for sr={} - check visualization", sr);
+        }
     }
 
     cleanup_test_dir(&test_dir)?;
