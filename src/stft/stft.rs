@@ -185,7 +185,10 @@ fn create_mel_filter_bank(
     let f_min = f_min.unwrap_or(0.0);
     let f_max = f_max.unwrap_or(sr as f32 / 2.0); // (Nyquist theorem)
 
-    //let weights = todo!();
+    // Create weights
+    // Equivalent to weights = np.zeros((n_mels, int(1 + n_fft // 2)), dtype=dtype)
+    let n_freq_bins = 1 + n_fft / 2;
+    let mut weights: Vec<Vec<f32>> = vec![vec![0.0f32; n_freq_bins]; n_mels];
 
     // Compute fft frequencies.
     // From librosa official doc
@@ -205,55 +208,82 @@ fn create_mel_filter_bank(
     // Equivalent to fdiff = np.diff(mel_f) in Librosa implementation
     let mel_freqs_diffs: Vec<f32> = mel_freqs.windows(2).map(|w| w[1] - w[0]).collect();
 
-    todo!();
+    // Create ramps matrix: ramps[i][j] = mel_freqs[i] - fft_freqs[j]
+    // Equivalent to ramps = np.subtract.outer(mel_f, fftfreqs) in Librosa
+    let ramps: Vec<Vec<f32>> = mel_freqs
+        .iter()
+        .map(|&mel_freq| {
+            fft_freqs
+                .iter()
+                .map(|&fft_freq| mel_freq - fft_freq)
+                .collect()
+        })
+        .collect();
+
+    // Creates triangular mel filter banks that convert linear frequency spectrograms
+    // to perceptually-motivated mel-scale representations.
+    for i in 0..n_mels {
+        // Lower and upper slopes for all bins
+        let lower: Vec<f32> = ramps[i].iter().map(|&r| -r / mel_freqs_diffs[i]).collect();
+
+        let upper: Vec<f32> = ramps[i + 2]
+            .iter()
+            .map(|&r| r / mel_freqs_diffs[i + 1])
+            .collect();
+
+        // .. then intersect them with each other and zero
+        weights[i] = lower
+            .iter()
+            .zip(upper.iter())
+            .map(|(&l, &u)| 0.0f32.max(l.min(u)))
+            .collect();
+    }
+
+    // Apply Slaney normalization (librosa's default, regardless of choice for mel scale)
+    // Compute normalization factors: 2.0 / (mel_f[2:n_mels+2] - mel_f[0:n_mels])
+    let enorm: Vec<f32> = (0..n_mels)
+        .map(|i| 2.0 / (mel_freqs[i + 2] - mel_freqs[i]))
+        .collect();
+
+    // Apply normalization to each filter
+    for i in 0..n_mels {
+        for j in 0..n_freq_bins {
+            weights[i][j] *= enorm[i];
+        }
+    }
+
+    weights
 }
 
-// if fmax is None:
-//         fmax = float(sr) / 2
+/// Apply Mel filters to an already created spectrogram
+pub fn convert_to_mel(
+    spectrogram: &Vec<Vec<f32>>,
+    sr: u32,
+    n_fft: usize,
+    n_mels: usize,
+    f_min: Option<f32>, // Lower cut-off frequency
+    f_max: Option<f32>, // Upper cut-off frequency
+    mel_scale: MelScale,
+) -> Vec<Vec<f32>> {
+    // Create mel filter bank matrix
+    let mel_filters = create_mel_filter_bank(sr, n_fft, n_mels, f_min, f_max, mel_scale);
 
-//     # Initialize the weights
-//     n_mels = int(n_mels)
-//     weights = np.zeros((n_mels, int(1 + n_fft // 2)), dtype=dtype)
+    // Apply filters: mel_spec[mel_bin][time] = sum(spec[freq][time] * filter[mel_bin][freq])
+    let mut mel_spec = vec![vec![0.0; spectrogram[0].len()]; n_mels];
 
-//     # Center freqs of each FFT bin
-//     fftfreqs = fft_frequencies(sr=sr, n_fft=n_fft)
+    for (mel_idx, filter) in mel_filters.iter().enumerate() {
+        for time_idx in 0..spectrogram[0].len() {
+            mel_spec[mel_idx][time_idx] = spectrogram
+                .iter()
+                .zip(filter.iter())
+                .map(|(freq_bin, &filter_val)| freq_bin[time_idx] * filter_val)
+                .sum();
+        }
+    }
 
-//     # 'Center freqs' of mel bands - uniformly spaced between limits
-//     mel_f = mel_frequencies(n_mels + 2, fmin=fmin, fmax=fmax, htk=htk)
+    mel_spec
+}
 
-//     fdiff = np.diff(mel_f)
-//     ramps = np.subtract.outer(mel_f, fftfreqs)
-
-//     for i in range(n_mels):
-//         # lower and upper slopes for all bins
-//         lower = -ramps[i] / fdiff[i]
-//         upper = ramps[i + 2] / fdiff[i + 1]
-
-//         # .. then intersect them with each other and zero
-//         weights[i] = np.maximum(0, np.minimum(lower, upper))
-
-//     if isinstance(norm, str):
-//         if norm == "slaney":
-//             # Slaney-style mel is scaled to be approx constant energy per channel
-//             enorm = 2.0 / (mel_f[2 : n_mels + 2] - mel_f[:n_mels])
-//             weights *= enorm[:, np.newaxis]
-//         else:
-//             raise ParameterError(f"Unsupported norm={norm}")
-//     else:
-//         weights = util.normalize(weights, norm=norm, axis=-1)
-
-//     # Only check weights if f_mel[0] is positive
-//     if not np.all((mel_f[:-2] == 0) | (weights.max(axis=1) > 0)):
-//         # This means we have an empty channel somewhere
-//         warnings.warn(
-//             "Empty filters detected in mel frequency basis. "
-//             "Some channels will produce empty responses. "
-//             "Try increasing your sampling rate (and fmax) or "
-//             "reducing n_mels.",
-//             stacklevel=2,
-//         )
-
-//     return weights
 
 // /// Create mel filter bank matrix
 // /// Returns: Vec<Vec<f32>> where each inner Vec is a filter (one per mel bin)
