@@ -30,3 +30,4 @@ lto = true
 
 [dev-dependencies]
 uuid = { version = "1.18.1", features = ["v4"] }
+serde_json = "1.0"
