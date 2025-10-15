@@ -28,8 +28,8 @@ pub fn read_audio_file_mono(audio_file_path: &str) -> Result<(Vec<f32>, u32)> {
     // Calculate the maximum value based on bits_per_sample
     let max_value = 2_f64.powi(bits_per_sample as i32 - 1);
 
-    // Define accumulator to compute average in case of stereo
-    let mut acc = 0_i32;
+    // Define accumulator to compute average in case of stereo (using i64 to prevent overflow)
+    let mut acc = 0_i64;
 
     // Read into samples vec
     reader
@@ -40,11 +40,11 @@ pub fn read_audio_file_mono(audio_file_path: &str) -> Result<(Vec<f32>, u32)> {
         .enumerate()
         .for_each(|(i, &sample)| {
             if channels == 2 {
-                acc += sample;
+                acc += sample as i64;
                 if i % 2 != 0 {
                     // Average and normalize by dividing by max_value
                     samples.push(acc as f32 / 2.0 / max_value as f32);
-                    acc = 0_i32;
+                    acc = 0_i64;
                 }
             } else if channels == 1 {
                 // Normalize by dividing by max_value
