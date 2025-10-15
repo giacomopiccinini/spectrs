@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Result};
 use spectrs::stft::stft::{MelScale, SpectrogramType, convert_to_mel, par_compute_spectrogram};
 use spectrs::utils::audio::{read_audio_file_mono, resample};
 
@@ -31,15 +31,7 @@ fn main() -> Result<()> {
         st,
     );
 
-    let x = convert_to_mel(
-        &spectrogram,
-        target_sr,
-        n_fft,
-        n_mels,
-        f_min,
-        f_max,
-        ms,
-    );
+    let _x = convert_to_mel(&spectrogram, target_sr, n_fft, n_mels, f_min, f_max, ms);
 
     Ok(())
 }
