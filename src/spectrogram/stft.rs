@@ -16,7 +16,88 @@ fn create_hann_window(length: usize) -> Vec<f32> {
         .collect()
 }
 
-/// Compute the spectrogram
+/// Compute the spectrogram (single-threaded)
+/// n_samples: number of samples in each Fast Fourier Transform (FFT) window
+/// hop_length: stride between windows, i.e. number of samples between successive FFT frames
+/// win_length: number of samples in the window function applied before FFT
+/// Pad with zeros if needed. This is because usually win_length < n_samples
+/// and the missing are just zeros (in this case complex zeros)
+pub fn compute_spectrogram(
+    audio: &[f32],
+    n_samples: usize,
+    hop_length: usize,
+    win_length: usize,
+    center: bool,
+    spectrogram_type: SpectrogramType,
+) -> Vec<Vec<f32>> {
+    // Set-up FFT
+    let mut planner = FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(n_samples);
+
+    // Choose the transformation function to create the spectrogram
+    let transform_fn: fn(&Complex<f32>) -> f32 = match spectrogram_type {
+        SpectrogramType::Magnitude => |c| c.norm(),
+        SpectrogramType::Power => |c| c.norm_sqr(),
+    };
+
+    // Create (Hann) window
+    let window = create_hann_window(win_length);
+
+    // Determine the number of frames
+    let n_frames = (audio.len().saturating_sub(win_length)) / hop_length + 1;
+
+    // Determine number of frequency bins
+    let n_freq_bins = n_samples / 2 + 1;
+
+    // Directly create spectrogram in [freq][time] format (no transpose needed)
+    let mut spectrogram = vec![vec![0.0f32; n_frames]; n_freq_bins];
+
+    // Sequential loop over frames
+    for frame_idx in 0..n_frames {
+        // Determine start and end sample for each frame
+        let start = frame_idx * hop_length;
+        let end = (start + win_length).clamp(0, audio.len());
+
+        // Skip if start is beyond the end of the file
+        if start > audio.len() {
+            continue;
+        }
+
+        // Init buffer to be filled with windowed audio
+        let mut frame = vec![Complex::<f32>::new(0.0, 0.0); n_samples];
+
+        // Add an offset if the window needs to be centered
+        let centering_offset = if center {
+            (n_samples - win_length) / 2_usize
+        } else {
+            0_usize
+        };
+
+        // Window & copy into complex buffer
+        let src = &audio[start..end];
+        let win = &window[..src.len()];
+        for (dst, (&s, &w)) in frame
+            .iter_mut()
+            .skip(centering_offset)
+            .zip(src.iter().zip(win.iter()))
+        {
+            dst.re = s * w; // Convolve audio and window
+            dst.im = 0.0; // No imaginary part
+        }
+
+        // Run FFT
+        fft.process(&mut frame);
+
+        // Store positive freqs only and apply transformation fn
+        for (freq_idx, c) in frame.iter().take(n_freq_bins).enumerate() {
+            spectrogram[freq_idx][frame_idx] = transform_fn(c);
+        }
+    }
+
+    spectrogram
+}
+
+/// Compute the spectrogram (parallelized with rayon)
 /// n_samples: number of samples in each Fast Fourier Transform (FFT) window
 /// hop_length: stride between windows, i.e. number of samples between successive FFT frames
 /// win_length: number of samples in the window function applied before FFT

@@ -56,30 +56,36 @@ fn compare_with_librosa(
         "tests/benchmark/compare_spectrograms.py",
         &[spectrs_json, librosa_json, comparison_json],
     )?;
-    
+
     // Load comparison results
     let results_str = fs::read_to_string(comparison_json)?;
     let results: Value = serde_json::from_str(&results_str)?;
-    
+
     let correlation = results["correlation"].as_f64().unwrap() as f32;
     let relative_error = results["relative_error"].as_f64().unwrap() as f32;
     let normalized_rmse = results["normalized_rmse"].as_f64().unwrap_or(0.0) as f32;
-    
+
     // Check if test passes
     let passes = correlation >= CORRELATION_THRESHOLD && relative_error <= RELATIVE_ERROR_THRESHOLD;
-    
+
     // Save visualization if test fails
     if !passes {
         let viz_path = std::path::Path::new(spectrs_json)
             .parent()
             .unwrap()
             .join(format!("{}_comparison.png", test_name));
-        
+
         eprintln!("\nTest {} FAILED:", test_name);
-        eprintln!("  Correlation: {:.6} (threshold: {:.6})", correlation, CORRELATION_THRESHOLD);
-        eprintln!("  Relative Error: {:.6} (threshold: {:.6})", relative_error, RELATIVE_ERROR_THRESHOLD);
+        eprintln!(
+            "  Correlation: {:.6} (threshold: {:.6})",
+            correlation, CORRELATION_THRESHOLD
+        );
+        eprintln!(
+            "  Relative Error: {:.6} (threshold: {:.6})",
+            relative_error, RELATIVE_ERROR_THRESHOLD
+        );
         eprintln!("  Normalized RMSE: {:.6}", normalized_rmse);
-        
+
         // Generate visualization
         if let Err(e) = run_python_script(
             "tests/benchmark/debug_comparison.py",
@@ -89,9 +95,15 @@ fn compare_with_librosa(
         } else {
             eprintln!("  Visualization saved to: {}", viz_path.display());
         }
-        eprintln!("  Test data preserved in: {}", std::path::Path::new(spectrs_json).parent().unwrap().display());
+        eprintln!(
+            "  Test data preserved in: {}",
+            std::path::Path::new(spectrs_json)
+                .parent()
+                .unwrap()
+                .display()
+        );
     }
-    
+
     Ok((correlation, relative_error, passes))
 }
 
@@ -153,8 +165,11 @@ fn test_stft_compatibility_basic() -> Result<()> {
     if passes {
         cleanup_test_dir(&test_dir)?;
     }
-    
-    assert!(passes, "Librosa compatibility test failed - check visualization");
+
+    assert!(
+        passes,
+        "Librosa compatibility test failed - check visualization"
+    );
     Ok(())
 }
 
@@ -225,7 +240,11 @@ fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
 
         if !passes {
             // Don't cleanup test_dir on failure
-            assert!(passes, "Librosa compatibility test failed for n_fft={} - check visualization", n_fft);
+            assert!(
+                passes,
+                "Librosa compatibility test failed for n_fft={} - check visualization",
+                n_fft
+            );
         }
     }
 
@@ -293,7 +312,10 @@ fn test_mel_compatibility_htk() -> Result<()> {
     if passes {
         cleanup_test_dir(&test_dir)?;
     }
-    assert!(passes, "Librosa compatibility test failed - check visualization");
+    assert!(
+        passes,
+        "Librosa compatibility test failed - check visualization"
+    );
     Ok(())
 }
 
@@ -358,7 +380,11 @@ fn test_mel_compatibility_different_n_mels() -> Result<()> {
         );
 
         if !passes {
-            assert!(passes, "Librosa compatibility test failed for n_mels={} - check visualization", n_mels);
+            assert!(
+                passes,
+                "Librosa compatibility test failed for n_mels={} - check visualization",
+                n_mels
+            );
         }
     }
 
@@ -426,7 +452,10 @@ fn test_mel_compatibility_slaney() -> Result<()> {
     if passes {
         cleanup_test_dir(&test_dir)?;
     }
-    assert!(passes, "Librosa compatibility test failed - check visualization");
+    assert!(
+        passes,
+        "Librosa compatibility test failed - check visualization"
+    );
     Ok(())
 }
 
@@ -490,7 +519,10 @@ fn test_compatibility_complex_signal() -> Result<()> {
     if passes {
         cleanup_test_dir(&test_dir)?;
     }
-    assert!(passes, "Librosa compatibility test failed - check visualization");
+    assert!(
+        passes,
+        "Librosa compatibility test failed - check visualization"
+    );
     Ok(())
 }
 
@@ -555,7 +587,11 @@ fn test_compatibility_different_sample_rates() -> Result<()> {
         );
 
         if !passes {
-            assert!(passes, "Librosa compatibility test failed for sr={} - check visualization", sr);
+            assert!(
+                passes,
+                "Librosa compatibility test failed for sr={} - check visualization",
+                sr
+            );
         }
     }
 

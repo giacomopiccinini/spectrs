@@ -4,19 +4,19 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Giacomo Piccinini <giacomo.piccinini@proton.me>"]
 license = "MIT"
-description = "Spectrogram creation library"
+description = "Fast spectrogram creation library"
 readme = "README.md"
 homepage = "https://github.com/giacomopiccinini/spectrs"
 repository = "https://github.com/giacomopiccinini/spectrs"
-keywords = ["spectrogram", "audio"]
-
-[[bin]]
-name = "spectrs"
-path = "src/main.rs"
+keywords = ["spectrogram", "audio", "fft", "mel", "librosa"]
 
 [lib]
 name = "spectrs"
 path = "src/lib.rs"
+
+[features]
+default = []
+image = ["dep:image"]
 
 [dependencies]
 anyhow = "1.0.100"
@@ -24,6 +24,7 @@ hound = "3.5.1"
 rayon = "1.11.0"
 rubato = "0.16.2"
 rustfft = "6.4.1"
+image = { version = "0.25", optional = true }
 
 [profile.release]
 lto = true

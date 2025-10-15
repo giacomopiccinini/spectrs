@@ -3,7 +3,7 @@ mod common;
 use anyhow::Result;
 use common::{cleanup_test_dir, create_complex_test_wav, create_test_wav, setup_test_dir};
 use spectrs::io::audio::read_audio_file_mono;
-use spectrs::spectrogram::stft::{SpectrogramType, par_compute_spectrogram};
+use spectrs::spectrogram::stft::{SpectrogramType, compute_spectrogram, par_compute_spectrogram};
 
 #[test]
 fn test_compute_spectrogram_basic() -> Result<()> {
@@ -374,5 +374,99 @@ fn test_compute_spectrogram_stereo_to_mono() -> Result<()> {
     assert!(spec[0].len() > 0);
 
     cleanup_test_dir(&test_dir)?;
+    Ok(())
+}
+
+#[test]
+fn test_compute_vs_par_compute_same_results() -> Result<()> {
+    // Ensure single-threaded and parallel versions produce identical results
+    let sr = 16000;
+    let duration = 1.0;
+    let num_samples = (duration * sr as f32) as usize;
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|t| (t as f32 * 440.0 * 2.0 * std::f32::consts::PI / sr as f32).sin())
+        .collect();
+
+    let n_fft = 512;
+    let hop_length = 160;
+    let win_length = 400;
+
+    let spec_single = compute_spectrogram(
+        &samples,
+        n_fft,
+        hop_length,
+        win_length,
+        false,
+        SpectrogramType::Power,
+    );
+
+    let spec_parallel = par_compute_spectrogram(
+        &samples,
+        n_fft,
+        hop_length,
+        win_length,
+        false,
+        SpectrogramType::Power,
+    );
+
+    // Check they have the same shape
+    assert_eq!(spec_single.len(), spec_parallel.len());
+    assert_eq!(spec_single[0].len(), spec_parallel[0].len());
+
+    // Check they have the same values (allowing for floating point precision)
+    for (i, (row_single, row_parallel)) in spec_single.iter().zip(spec_parallel.iter()).enumerate()
+    {
+        for (j, (&val_single, &val_parallel)) in
+            row_single.iter().zip(row_parallel.iter()).enumerate()
+        {
+            assert!(
+                (val_single - val_parallel).abs() < 1e-5,
+                "Mismatch at [{}, {}]: {} vs {}",
+                i,
+                j,
+                val_single,
+                val_parallel
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_compute_spectrogram_single_threaded() -> Result<()> {
+    // Test the single-threaded version
+    let sr = 16000;
+    let duration = 0.5;
+    let num_samples = (duration * sr as f32) as usize;
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|t| (t as f32 * 440.0 * 2.0 * std::f32::consts::PI / sr as f32).sin())
+        .collect();
+
+    let n_fft = 256;
+    let hop_length = 128;
+    let win_length = 256;
+
+    let spec = compute_spectrogram(
+        &samples,
+        n_fft,
+        hop_length,
+        win_length,
+        false,
+        SpectrogramType::Power,
+    );
+
+    // Check dimensions
+    let n_freq_bins = n_fft / 2 + 1;
+    assert_eq!(spec.len(), n_freq_bins);
+    assert!(spec[0].len() > 0);
+
+    // Check that values are non-negative
+    for freq_bin in &spec {
+        for &value in freq_bin {
+            assert!(value >= 0.0);
+        }
+    }
+
     Ok(())
 }
