@@ -27,3 +27,6 @@ rustfft = "6.4.1"
 
 [profile.release]
 lto = true
+
+[dev-dependencies]
+uuid = { version = "1.18.1", features = ["v4"] }
