@@ -1,6 +1,7 @@
-use anyhow::{Result};
-use spectrs::stft::stft::{MelScale, SpectrogramType, convert_to_mel, par_compute_spectrogram};
-use spectrs::utils::audio::{read_audio_file_mono, resample};
+use anyhow::Result;
+use spectrs::io::audio::{read_audio_file_mono, resample};
+use spectrs::spectrogram::mel::{MelScale, convert_to_mel};
+use spectrs::spectrogram::stft::{SpectrogramType, par_compute_spectrogram};
 
 fn main() -> Result<()> {
     let (audio, sr) = read_audio_file_mono("harvard.wav")?;

@@ -69,7 +69,7 @@ pub fn resample(samples: Vec<f32>, original_sr: u32, target_sr: u32) -> Result<V
 
     // Perform the resampling
     let mut resampled = resampler
-        .process(&vec![samples], None)
+        .process(&[samples], None)
         .with_context(|| "Can't resample file")?;
 
     // Take ownership of the first channel, avoiding cloning

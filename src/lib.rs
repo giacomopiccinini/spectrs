@@ -1,2 +1,2 @@
-pub mod stft;
-pub mod utils;
+pub mod io;
+pub mod spectrogram;
