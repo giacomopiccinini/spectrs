@@ -12,6 +12,7 @@ Fast spectrogram creation library.
 - [Quick Start](#quick-start)
 - [Features](#features)
 - [Examples](#examples)
+- [Colormaps](#colormaps)
 - [Librosa Compatibility](#librosa-compatibility)
 - [Performance](#performance)
 - [API Reference](#api-reference)
@@ -24,7 +25,7 @@ spectrs is a Rust library for creating spectrograms from audio files. It provide
 - **Mel-scaled** spectrograms using HTK or Slaney scales
 - **Audio I/O** for reading WAV files (mono/stereo, 8/16/32-bit)
 - **Resampling** to arbitrary sample rates
-- **Image export** of spectrograms
+- **Image export** of spectrograms with multiple colormaps (Viridis, Magma, Inferno, Plasma, Gray)
 - **Compatibility** with librosa
 
 ## Installation
@@ -82,10 +83,17 @@ let mel_spec = convert_to_mel(
 ### Save Spectrogram as Image
 
 ```rust
-use spectrs::io::image::save_spectrogram_image;
+use spectrs::io::image::{save_spectrogram_image, Colormap};
 
 // Requires "image" feature
-save_spectrogram_image(&mel_spec, "spectrogram.png")?;
+// Use default Viridis colormap (librosa/matplotlib default)
+save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Viridis)?;
+
+// Or use other colormaps:
+// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Magma)?;
+// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Inferno)?;
+// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Plasma)?;
+// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Gray)?;
 ```
 
 ### Single-Threaded Mode
@@ -127,8 +135,15 @@ let mel = convert_to_mel(&spec, 22050, 2048, 128, None, None, MelScale::HTK);
 
 // Save as image (requires "image" feature)
 #[cfg(feature = "image")]
-spectrs::io::image::save_spectrogram_image(&mel, "output.png")?;
+{
+    use spectrs::io::image::Colormap;
+    spectrs::io::image::save_spectrogram_image(&mel, "output.png", Colormap::Viridis)?;
+}
 ```
+
+## Colormaps
+
+spectrs supports multiple colormaps for spectrogram visualization, including *viridis*, *magma*, *inferno*, *plasma* and simply *gray*. All colormaps implementations are based on the [matplotlib colormaps](https://github.com/BIDS/colormap).
 
 ## Librosa Compatibility
 
