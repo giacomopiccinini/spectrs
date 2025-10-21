@@ -192,7 +192,7 @@ fn test_compute_spectrogram_from_file() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 16000);
 
     // Compute spectrogram
@@ -227,7 +227,7 @@ fn test_compute_spectrogram_complex_signal() -> Result<()> {
     create_complex_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
     // Read audio
-    let (samples, _sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, _sr) = read_audio_file_mono(&audio_path)?;
 
     // Compute spectrogram
     let n_fft = 1024;
@@ -352,7 +352,7 @@ fn test_compute_spectrogram_stereo_to_mono() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 16000, 2, 16)?;
 
     // Read as mono (should average channels)
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 16000);
 
     // Compute spectrogram

@@ -10,13 +10,13 @@ use spectrs::spectrogram::stft::{SpectrogramType, par_compute_spectrogram};
 #[test]
 fn test_full_pipeline_mono_16bit() -> Result<()> {
     let test_dir = setup_test_dir()?;
-    let audio_path = test_dir.join("test_full_mono_16.wav");
+    let audio_path = test_dir.join("test_full_mono_16.wav").to_owned();
 
     // Create test file
     create_test_wav(&audio_path, 2.0, 44100, 1, 16)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 44100);
     assert_eq!(samples.len(), 88200);
 
@@ -62,7 +62,7 @@ fn test_full_pipeline_stereo_16bit() -> Result<()> {
     create_test_wav(&audio_path, 2.0, 44100, 2, 16)?;
 
     // Read audio (should average to mono)
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 44100);
     assert_eq!(samples.len(), 88200); // Same as mono
 
@@ -92,7 +92,7 @@ fn test_full_pipeline_mono_8bit() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 22050, 1, 8)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 22050);
 
     // Resample to 16000 Hz
@@ -121,7 +121,7 @@ fn test_full_pipeline_mono_32bit() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 48000, 1, 32)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     assert_eq!(sr, 48000);
 
     // Resample to 16000 Hz
@@ -150,7 +150,7 @@ fn test_full_pipeline_stereo_32bit() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 48000, 2, 32)?;
 
     // Full pipeline
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let resampled = resample(samples, sr, 16000)?;
     let spec = par_compute_spectrogram(&resampled, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, 16000, 512, 40, None, None, MelScale::HTK);
@@ -170,7 +170,7 @@ fn test_full_pipeline_different_fft_sizes() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let fft_sizes = vec![256, 512, 1024, 2048];
 
@@ -205,7 +205,7 @@ fn test_full_pipeline_different_mel_bins() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
 
@@ -233,7 +233,7 @@ fn test_full_pipeline_different_sample_rates() -> Result<()> {
         let audio_path = test_dir.join(format!("test_sr_{}.wav", sr));
         create_test_wav(&audio_path, 0.5, sr, 1, 16)?;
 
-        let (samples, read_sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+        let (samples, read_sr) = read_audio_file_mono(&audio_path)?;
         assert_eq!(read_sr, sr);
 
         let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
@@ -255,7 +255,7 @@ fn test_full_pipeline_magnitude_spectrogram() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Magnitude);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::HTK);
@@ -275,7 +275,7 @@ fn test_full_pipeline_centered() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, true, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::HTK);
@@ -295,7 +295,7 @@ fn test_full_pipeline_slaney_mel_scale() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::Slaney);
@@ -315,7 +315,7 @@ fn test_full_pipeline_custom_freq_range() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, Some(300.0), Some(4000.0), MelScale::HTK);
@@ -335,7 +335,7 @@ fn test_full_pipeline_complex_audio() -> Result<()> {
 
     create_complex_test_wav(&audio_path, 2.0, 22050, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let resampled = resample(samples, sr, 16000)?;
     let spec = par_compute_spectrogram(&resampled, 1024, 256, 512, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, 16000, 1024, 80, None, None, MelScale::HTK);
@@ -363,7 +363,7 @@ fn test_full_pipeline_short_audio() -> Result<()> {
 
     create_test_wav(&audio_path, 0.1, 16000, 1, 16)?; // 100ms
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 256, 128, 256, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 256, 20, None, None, MelScale::HTK);
 
@@ -382,7 +382,7 @@ fn test_full_pipeline_long_audio() -> Result<()> {
 
     create_test_wav(&audio_path, 10.0, 16000, 1, 16)?; // 10 seconds
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::HTK);
 

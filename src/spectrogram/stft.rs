@@ -1,9 +1,11 @@
+//use clap::ValueEnum;
 use rayon::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
 
 // Different spectrogram types
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum SpectrogramType {
     Magnitude,
     Power,

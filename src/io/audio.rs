@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use hound::WavReader;
 use rubato::{FftFixedIn, Resampler};
+use std::path::Path;
 
 /// Read audio file from file path and convert to mono by averaging left and right channel
-pub fn read_audio_file_mono(audio_file_path: &str) -> Result<(Vec<f32>, u32)> {
+pub fn read_audio_file_mono(audio_file_path: &Path) -> Result<(Vec<f32>, u32)> {
     // Open the WAV file
     let mut reader =
         WavReader::open(audio_file_path).with_context(|| "Failed to open audio file")?;

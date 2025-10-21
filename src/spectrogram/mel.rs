@@ -1,5 +1,9 @@
+//use clap::ValueEnum;
+use rayon::prelude::*;
+
 // Different sconversions to mel scale
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum MelScale {
     HTK,
     Slaney,
@@ -144,7 +148,7 @@ fn create_mel_filter_bank(
     weights
 }
 
-/// Apply Mel filters to an already created spectrogram
+/// Apply Mel filters to an already created spectrogram (sequential version)
 pub fn convert_to_mel(
     spectrogram: &[Vec<f32>],
     sr: u32,
@@ -171,4 +175,98 @@ pub fn convert_to_mel(
     }
 
     mel_spec
+}
+
+/// Create mel filter bank (parallelized version)
+fn par_create_mel_filter_bank(
+    sr: u32,
+    n_fft: usize,
+    n_mels: usize,
+    f_min: Option<f32>, // Lower cut-off frequency
+    f_max: Option<f32>, // Upper cut-off frequency
+    mel_scale: MelScale,
+) -> Vec<Vec<f32>> {
+    // Use provided values or defaults
+    let f_min = f_min.unwrap_or(0.0);
+    let f_max = f_max.unwrap_or(sr as f32 / 2.0); // (Nyquist theorem)
+
+    // Compute fft frequencies
+    let fft_freqs: Vec<f32> = (0..=n_fft / 2_usize)
+        .map(|i| i as f32 * sr as f32 / n_fft as f32)
+        .collect();
+
+    // Extract mel frequencies
+    let mel_freqs: Vec<f32> = create_mel_frequencies(f_min, f_max, n_mels + 2, mel_scale);
+
+    // Compute differences between subsequent mel frequencies
+    let mel_freqs_diffs: Vec<f32> = mel_freqs.windows(2).map(|w| w[1] - w[0]).collect();
+
+    // Create ramps matrix in parallel
+    let ramps: Vec<Vec<f32>> = mel_freqs
+        .par_iter()
+        .map(|&mel_freq| {
+            fft_freqs
+                .iter()
+                .map(|&fft_freq| mel_freq - fft_freq)
+                .collect()
+        })
+        .collect();
+
+    // Apply Slaney normalization factors
+    let enorm: Vec<f32> = (0..n_mels)
+        .map(|i| 2.0 / (mel_freqs[i + 2] - mel_freqs[i]))
+        .collect();
+
+    // Create triangular mel filter banks in parallel
+    (0..n_mels)
+        .into_par_iter()
+        .map(|i| {
+            // Lower and upper slopes for all bins
+            let lower: Vec<f32> = ramps[i].iter().map(|&r| -r / mel_freqs_diffs[i]).collect();
+
+            let upper: Vec<f32> = ramps[i + 2]
+                .iter()
+                .map(|&r| r / mel_freqs_diffs[i + 1])
+                .collect();
+
+            // Intersect them with each other and zero, then apply normalization
+            lower
+                .iter()
+                .zip(upper.iter())
+                .map(|(&l, &u)| 0.0f32.max(l.min(u)) * enorm[i])
+                .collect()
+        })
+        .collect()
+}
+
+/// Apply Mel filters to an already created spectrogram (parallelized version)
+pub fn par_convert_to_mel(
+    spectrogram: &[Vec<f32>],
+    sr: u32,
+    n_fft: usize,
+    n_mels: usize,
+    f_min: Option<f32>, // Lower cut-off frequency
+    f_max: Option<f32>, // Upper cut-off frequency
+    mel_scale: MelScale,
+) -> Vec<Vec<f32>> {
+    // Create mel filter bank matrix (using parallelized version)
+    let mel_filters = par_create_mel_filter_bank(sr, n_fft, n_mels, f_min, f_max, mel_scale);
+
+    // Apply filters in parallel: mel_spec[mel_bin][time] = sum(spec[freq][time] * filter[mel_bin][freq])
+    let n_time_frames = spectrogram[0].len();
+
+    mel_filters
+        .par_iter()
+        .map(|filter| {
+            let mut mel_row = vec![0.0; n_time_frames];
+            for time_idx in 0..n_time_frames {
+                mel_row[time_idx] = spectrogram
+                    .iter()
+                    .zip(filter.iter())
+                    .map(|(freq_bin, &filter_val)| freq_bin[time_idx] * filter_val)
+                    .sum();
+            }
+            mel_row
+        })
+        .collect()
 }
