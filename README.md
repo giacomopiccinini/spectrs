@@ -30,115 +30,53 @@ spectrs is a Rust library for creating spectrograms from audio files. It provide
 
 ## Installation
 
-Add spectrs to your project with
+### As a Command-Line Tool
 
-```
-cargo add spectrs
-```
+Install the binary with full features (CLI + image support):
 
-or with image export support
-
-```
-cargo add spectrs --features image
+```bash
+cargo install spectrs
 ```
 
-## Examples
+### As a Library
 
-### Basic STFT Spectrogram
+When using spectrs as a library dependency, you typically want minimal dependencies. Add it with:
 
-```rust
-use spectrs::io::audio::read_audio_file_mono;
-use spectrs::spectrogram::stft::{par_compute_spectrogram, SpectrogramType};
+```bash
+# Minimal dependencies (core audio and spectrogram functionality only)
+cargo add spectrs --no-default-features
 
-let (audio, _sr) = read_audio_file_mono("speech.wav")?;
-
-// Compute magnitude spectrogram
-let spec = par_compute_spectrogram(
-    &audio,
-    2048,   // n_fft: higher = better frequency resolution
-    512,    // hop_length: lower = better time resolution
-    2048,   // win_length: window size
-    true,   // center: pad the signal
-    SpectrogramType::Magnitude
-);
+# With image export support
+cargo add spectrs --no-default-features --features image
 ```
 
-### Mel Spectrogram
+## Quick Start
 
-```rust
-use spectrs::spectrogram::mel::{convert_to_mel, MelScale};
+### Command-Line Usage
 
-// First compute STFT, then convert to mel
-let mel_spec = convert_to_mel(
-    &spec,
-    22050,              // sample_rate
-    2048,               // n_fft
-    128,                // n_mels: number of mel bands
-    Some(20.0),         // f_min: lowest frequency
-    Some(8000.0),       // f_max: highest frequency
-    MelScale::Slaney    // librosa default
-);
-```
+After installing with `cargo install spectrs`, you can process audio files from the command line.
+The CLI will automatically create PNG images with the same name as the input file(s).
 
-### Save Spectrogram as Image
+```bash
+# Process a single file with default settings
+spectrs audio.wav
 
-```rust
-use spectrs::io::image::{save_spectrogram_image, Colormap};
+# Create a mel spectrogram with 128 mel bands
+spectrs audio.wav --n-mels 128
 
-// Requires "image" feature
-// Use default Viridis colormap (librosa/matplotlib default)
-save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Viridis)?;
+# Customize spectrogram parameters
+spectrs audio.wav \
+  --n-fft 2048 \
+  --hop-length 512 \
+  --n-mels 128 \
+  --spec-type power \
+  --colormap viridis
 
-// Or use other colormaps:
-// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Magma)?;
-// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Inferno)?;
-// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Plasma)?;
-// save_spectrogram_image(&mel_spec, "spectrogram.png", Colormap::Gray)?;
-```
+# Process all WAV files in a directory
+spectrs audio_folder/
 
-### Single-Threaded Mode
-
-For small files or embedded systems:
-
-```rust
-use spectrs::spectrogram::stft::compute_spectrogram;
-
-// Non-parallelized version (lower overhead)
-let spec = compute_spectrogram(
-    &audio,
-    512,
-    160,
-    400,
-    false,
-    SpectrogramType::Power
-);
-```
-
-### Complete Pipeline
-
-```rust
-use spectrs::io::audio::{read_audio_file_mono, resample};
-use spectrs::spectrogram::stft::{par_compute_spectrogram, SpectrogramType};
-use spectrs::spectrogram::mel::{convert_to_mel, MelScale};
-
-// Read and process audio file
-let (audio, sr) = read_audio_file_mono("song.wav")?;
-
-// Resample to standard rate
-let audio = resample(audio, sr, 22050)?;
-
-// Compute spectrogram
-let spec = par_compute_spectrogram(&audio, 2048, 512, 2048, true, SpectrogramType::Power);
-
-// Convert to mel
-let mel = convert_to_mel(&spec, 22050, 2048, 128, None, None, MelScale::HTK);
-
-// Save as image (requires "image" feature)
-#[cfg(feature = "image")]
-{
-    use spectrs::io::image::Colormap;
-    spectrs::io::image::save_spectrogram_image(&mel, "output.png", Colormap::Viridis)?;
-}
+# See all available options
+spectrs --help
 ```
 
 ## Colormaps
@@ -147,10 +85,5 @@ spectrs supports multiple colormaps for spectrogram visualization, including *vi
 
 ## Librosa Compatibility
 
-spectrs is designed to replicate librosa's behaviour in the Rust ecosystem. Compatibility tests are part of the test suite, ensuring correlation between librosa's and spectrs' above 99% and relative error on relevant bands < 2%. 
-
-Run compatibility tests:
-
-```bash
-cargo test --test test_librosa_compatibility
+spectrs is designed to replicate librosa's behaviour in the Rust ecosystem. Compatibility tests are part of the test suite, ensuring correlation between librosa's and spectrs' above 99% and relative error on relevant bands < 2%.
 ```

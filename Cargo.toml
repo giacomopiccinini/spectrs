@@ -15,7 +15,7 @@ name = "spectrs"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["cli", "image"]
 image = ["dep:image"]
 cli = ["dep:clap", "dep:walkdir"]
 
