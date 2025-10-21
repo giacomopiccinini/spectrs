@@ -1,9 +1,11 @@
 #[cfg(feature = "image")]
 use anyhow::Context;
 use anyhow::Result;
+use std::path::PathBuf;
 
 /// Available colormaps for spectrogram visualization
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Colormap {
     /// Perceptually uniform, great for spectrograms (matplotlib/librosa default)
     #[default]
@@ -1100,7 +1102,7 @@ fn apply_colormap(value: f32, colormap: Colormap) -> [u8; 3] {
 #[cfg(feature = "image")]
 pub fn save_spectrogram_image(
     spectrogram: &[Vec<f32>],
-    output_path: &str,
+    output_path: PathBuf,
     colormap: Colormap,
 ) -> Result<()> {
     use image::{ImageBuffer, Rgb};
@@ -1153,7 +1155,7 @@ pub fn save_spectrogram_image(
 
     // Save the image
     img.save(output_path)
-        .with_context(|| format!("Failed to save image to {}", output_path))?;
+        .with_context(|| "Failed to save image")?;
 
     Ok(())
 }
@@ -1161,7 +1163,7 @@ pub fn save_spectrogram_image(
 #[cfg(not(feature = "image"))]
 pub fn save_spectrogram_image(
     _spectrogram: &[Vec<f32>],
-    _output_path: &str,
+    _output_path: PathBuf,
     _colormap: Colormap,
 ) -> Result<()> {
     anyhow::bail!("Image feature not enabled. Compile with --features image to use this function.")

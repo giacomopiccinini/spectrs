@@ -1,5 +1,8 @@
+//use clap::ValueEnum;
+
 // Different sconversions to mel scale
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum MelScale {
     HTK,
     Slaney,
