@@ -116,7 +116,7 @@ fn test_stft_compatibility_basic() -> Result<()> {
     create_test_wav(&audio_path, 2.0, 16000, 1, 16)?;
 
     // Compute spectrogram with spectrs
-    let (samples, _sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, _sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
 
     // Save spectrs output
@@ -180,7 +180,7 @@ fn test_stft_compatibility_different_fft_sizes() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, _sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, _sr) = read_audio_file_mono(&audio_path)?;
 
     let fft_sizes = vec![256, 512, 1024];
 
@@ -260,7 +260,7 @@ fn test_mel_compatibility_htk() -> Result<()> {
     create_test_wav(&audio_path, 2.0, 16000, 1, 16)?;
 
     // Spectrs
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::HTK);
 
@@ -326,7 +326,7 @@ fn test_mel_compatibility_different_n_mels() -> Result<()> {
 
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
 
     let n_mels_values = vec![20, 40, 80];
@@ -400,7 +400,7 @@ fn test_mel_compatibility_slaney() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
     // Spectrs
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 512, 40, None, None, MelScale::Slaney);
 
@@ -467,7 +467,7 @@ fn test_compatibility_complex_signal() -> Result<()> {
     create_complex_test_wav(&audio_path, 2.0, 16000, 1, 16)?;
 
     // Spectrs
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
     let spec = par_compute_spectrogram(&samples, 1024, 256, 512, false, SpectrogramType::Power);
     let mel_spec = convert_to_mel(&spec, sr, 1024, 80, None, None, MelScale::HTK);
 
@@ -537,7 +537,7 @@ fn test_compatibility_different_sample_rates() -> Result<()> {
         create_test_wav(&audio_path, 1.0, sr, 1, 16)?;
 
         // Spectrs
-        let (samples, read_sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+        let (samples, read_sr) = read_audio_file_mono(&audio_path)?;
         let spec = par_compute_spectrogram(&samples, 512, 160, 400, false, SpectrogramType::Power);
         let mel_spec = convert_to_mel(&spec, read_sr, 512, 40, None, None, MelScale::HTK);
 

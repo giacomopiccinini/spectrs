@@ -3,7 +3,7 @@ mod common;
 use anyhow::Result;
 use common::{cleanup_test_dir, create_complex_test_wav, create_test_wav, setup_test_dir};
 use spectrs::io::audio::read_audio_file_mono;
-use spectrs::spectrogram::mel::{MelScale, convert_to_mel};
+use spectrs::spectrogram::mel::{MelScale, convert_to_mel, par_convert_to_mel};
 use spectrs::spectrogram::stft::{SpectrogramType, par_compute_spectrogram};
 
 #[test]
@@ -200,7 +200,7 @@ fn test_convert_to_mel_from_file() -> Result<()> {
     create_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     // Compute spectrogram
     let n_fft = 512;
@@ -237,7 +237,7 @@ fn test_convert_to_mel_complex_signal() -> Result<()> {
     create_complex_test_wav(&audio_path, 1.0, 16000, 1, 16)?;
 
     // Read audio
-    let (samples, sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+    let (samples, sr) = read_audio_file_mono(&audio_path)?;
 
     // Compute spectrogram
     let n_fft = 1024;
@@ -329,7 +329,7 @@ fn test_convert_to_mel_different_sample_rates() -> Result<()> {
         let audio_path = test_dir.join(format!("test_mel_{}.wav", sr));
         create_test_wav(&audio_path, 0.5, sr, 1, 16)?;
 
-        let (samples, read_sr) = read_audio_file_mono(audio_path.to_str().unwrap())?;
+        let (samples, read_sr) = read_audio_file_mono(&audio_path)?;
         assert_eq!(read_sr, sr);
 
         let n_fft = 512;
@@ -419,6 +419,132 @@ fn test_convert_to_mel_magnitude_vs_power() -> Result<()> {
     }
 
     assert!(differences > 0);
+
+    Ok(())
+}
+
+#[test]
+fn test_convert_to_mel_vs_par_convert_to_mel() -> Result<()> {
+    // Test that sequential and parallel versions produce identical results
+    let sr = 22050;
+    let duration = 2.0;
+    let num_samples = (duration * sr as f32) as usize;
+
+    // Create a complex signal with multiple frequencies
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|t| {
+            let t_sec = t as f32 / sr as f32;
+            (t_sec * 440.0 * 2.0 * std::f32::consts::PI).sin() * 0.5
+                + (t_sec * 880.0 * 2.0 * std::f32::consts::PI).sin() * 0.3
+                + (t_sec * 1320.0 * 2.0 * std::f32::consts::PI).sin() * 0.2
+        })
+        .collect();
+
+    let n_fft = 2048;
+    let hop_length = 512;
+    let win_length = 2048;
+
+    // Create spectrogram
+    let spec = par_compute_spectrogram(
+        &samples,
+        n_fft,
+        hop_length,
+        win_length,
+        true,
+        SpectrogramType::Power,
+    );
+
+    let n_mels = 128;
+    let f_min = Some(0.0);
+    let f_max = Some((sr / 2) as f32);
+
+    // Test with both mel scales
+    for mel_scale in [MelScale::Slaney, MelScale::HTK] {
+        // Sequential version
+        let mel_spec_seq = convert_to_mel(&spec, sr, n_fft, n_mels, f_min, f_max, mel_scale);
+
+        // Parallel version
+        let mel_spec_par = par_convert_to_mel(&spec, sr, n_fft, n_mels, f_min, f_max, mel_scale);
+
+        // Verify dimensions match
+        assert_eq!(mel_spec_seq.len(), mel_spec_par.len());
+        assert_eq!(mel_spec_seq[0].len(), mel_spec_par[0].len());
+
+        // Verify values are identical (allowing for small floating point errors)
+        let tolerance = 1e-6;
+        for i in 0..mel_spec_seq.len() {
+            for j in 0..mel_spec_seq[0].len() {
+                let diff = (mel_spec_seq[i][j] - mel_spec_par[i][j]).abs();
+                assert!(
+                    diff < tolerance,
+                    "Mismatch at [{},{}] for {:?}: seq={}, par={}, diff={}",
+                    i,
+                    j,
+                    mel_scale,
+                    mel_spec_seq[i][j],
+                    mel_spec_par[i][j],
+                    diff
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_par_convert_to_mel_basic() -> Result<()> {
+    // Test that par_convert_to_mel works correctly on a basic example
+    let sr = 16000;
+    let duration = 1.0;
+    let num_samples = (duration * sr as f32) as usize;
+    let samples: Vec<f32> = (0..num_samples)
+        .map(|t| (t as f32 * 440.0 * 2.0 * std::f32::consts::PI / sr as f32).sin())
+        .collect();
+
+    let n_fft = 512;
+    let hop_length = 160;
+    let win_length = 400;
+
+    let spec = par_compute_spectrogram(
+        &samples,
+        n_fft,
+        hop_length,
+        win_length,
+        false,
+        SpectrogramType::Power,
+    );
+
+    let mel_spec = par_convert_to_mel(
+        &spec,
+        sr,
+        n_fft,
+        40,
+        Some(0.0),
+        Some(8000.0),
+        MelScale::Slaney,
+    );
+
+    // Check dimensions
+    assert_eq!(mel_spec.len(), 40);
+    assert!(mel_spec[0].len() > 0);
+
+    // Check non-negativity
+    for mel_bin in &mel_spec {
+        for &value in mel_bin {
+            assert!(
+                value >= 0.0,
+                "Mel spectrogram values should be non-negative"
+            );
+        }
+    }
+
+    // Check that some energy exists
+    let total_energy: f32 = mel_spec.iter().flatten().sum();
+    assert!(
+        total_energy > 0.0,
+        "Mel spectrogram should have some energy"
+    );
 
     Ok(())
 }
