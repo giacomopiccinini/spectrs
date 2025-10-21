@@ -3,8 +3,8 @@ use clap::Parser;
 use rayon::prelude::*;
 use spectrs::io::audio::{read_audio_file_mono, resample};
 use spectrs::io::image::{Colormap, save_spectrogram_image};
-use spectrs::spectrogram::mel::{MelScale, convert_to_mel};
-use spectrs::spectrogram::stft::{SpectrogramType, compute_spectrogram};
+use spectrs::spectrogram::mel::{MelScale, convert_to_mel, par_convert_to_mel};
+use spectrs::spectrogram::stft::{SpectrogramType, compute_spectrogram, par_compute_spectrogram};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -60,7 +60,8 @@ pub struct Cli {
     pub colormap: Colormap,
 }
 
-fn create_spectrogram(
+/// Create spectrogram for a single file (uses parallel spectrogram computation)
+fn par_create_spectrogram(
     input: &Path,
     sr: Option<u32>,
     n_fft: usize,
@@ -88,10 +89,64 @@ fn create_spectrogram(
         target_sr = original_sr;
     }
 
-    // Create spectrogram
+    // Create spectrogram (parallelized over frames)
+    let mut spec =
+        par_compute_spectrogram(&audio, n_fft, hop_length, win_length, center, spec_type);
+
+    // Convert to mel if necessary (parallelized over mel bands)
+    if n_mels.is_some() {
+        spec = par_convert_to_mel(
+            &spec,
+            target_sr,
+            n_fft,
+            n_mels.unwrap(),
+            f_min,
+            f_max,
+            mel_scale,
+        );
+    }
+
+    // Define output
+    let output = input.with_extension("png");
+
+    save_spectrogram_image(&spec, output, colormap).with_context(|| "Failed to save spectogram")?;
+
+    Ok(())
+}
+
+/// Create spectrogram for batch processing (uses sequential spectrogram computation)
+fn create_spectrogram_sequential(
+    input: &Path,
+    sr: Option<u32>,
+    n_fft: usize,
+    hop_length: usize,
+    win_length: usize,
+    center: bool,
+    spec_type: SpectrogramType,
+    n_mels: Option<usize>,
+    f_min: Option<f32>,
+    f_max: Option<f32>,
+    mel_scale: MelScale,
+    colormap: Colormap,
+) -> Result<()> {
+    // Read audio file and convert to mono
+    let (mut audio, original_sr) =
+        read_audio_file_mono(input).with_context(|| "Failed to read audio")?;
+
+    // Resample if necessary
+    let target_sr;
+    if sr.is_some() && sr.unwrap() != original_sr {
+        audio = resample(audio, original_sr, sr.unwrap())
+            .with_context(|| "Failed to resample audio")?;
+        target_sr = sr.unwrap();
+    } else {
+        target_sr = original_sr;
+    }
+
+    // Create spectrogram (sequential - parallelism is at file level)
     let mut spec = compute_spectrogram(&audio, n_fft, hop_length, win_length, center, spec_type);
 
-    // Convert to mel if necessary
+    // Convert to mel if necessary (sequential - parallelism is at file level)
     if n_mels.is_some() {
         spec = convert_to_mel(
             &spec,
@@ -123,9 +178,9 @@ fn main() -> Result<()> {
         anyhow::bail!("Input path does not exist: {}", input.display());
     }
 
-    // Case of single input file
+    // Case of single input file - use parallel spectrogram computation
     if input.is_file() && input.extension().and_then(|ext| ext.to_str()) == Some("wav") {
-        create_spectrogram(
+        par_create_spectrogram(
             &input,
             args.sr,
             args.n_fft,
@@ -141,7 +196,7 @@ fn main() -> Result<()> {
         )
         .with_context(|| "Failed to create spectrogram")?;
     }
-    // Case of input being a directory
+    // Case of input being a directory - parallelize over files, sequential spectrogram
     else {
         let files: Vec<_> = WalkDir::new(input)
             .into_iter()
@@ -153,7 +208,7 @@ fn main() -> Result<()> {
         files
             .par_iter()
             .try_for_each(|file| -> Result<()> {
-                create_spectrogram(
+                create_spectrogram_sequential(
                     &file,
                     args.sr,
                     args.n_fft,
