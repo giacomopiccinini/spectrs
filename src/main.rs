@@ -115,7 +115,7 @@ fn par_create_spectrogram(
 }
 
 /// Create spectrogram for batch processing (uses sequential spectrogram computation)
-fn create_spectrogram_sequential(
+fn create_spectrogram(
     input: &Path,
     sr: Option<u32>,
     n_fft: usize,
@@ -208,7 +208,7 @@ fn main() -> Result<()> {
         files
             .par_iter()
             .try_for_each(|file| -> Result<()> {
-                create_spectrogram_sequential(
+                create_spectrogram(
                     &file,
                     args.sr,
                     args.n_fft,
