@@ -72,8 +72,12 @@ spectrs audio.wav \
   --spec-type power \
   --colormap viridis
 
-# Process all WAV files in a directory
+# Walk a directory and process all WAV files, placing output files alongside WAV files
 spectrs audio_folder/
+
+# Walk a directory and process all WAV files, placing output files in another directory
+# with the same nested structure (if any) of the input directory
+spectrs audio_folder/ --output-dir processed_audio_folder/
 
 # See all available options
 spectrs --help
