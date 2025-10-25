@@ -1153,6 +1153,12 @@ pub fn save_spectrogram_image(
         }
     }
 
+    // Ensure parent directory exists
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+    }
+
     // Save the image
     img.save(output_path)
         .with_context(|| "Failed to save image")?;

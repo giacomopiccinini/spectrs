@@ -9,6 +9,7 @@ This directory contains comprehensive tests for the spectrs library, including u
 - **`test_spectrogram.rs`**: Unit tests for STFT spectrogram computation
 - **`test_mel.rs`**: Unit tests for mel spectrogram conversion
 - **`test_integration.rs`**: Integration tests for the full pipeline (read → resample → STFT → mel)
+- **`test_cli.rs`**: Integration tests for the CLI binary and `--output-dir` functionality
 - **`test_librosa_compatibility.rs`**: Benchmark tests comparing spectrs output with librosa (Python)
 - **`benchmark/`**: Python scripts for librosa comparison
 
@@ -36,6 +37,11 @@ cargo test --test test_mel
 Run only integration tests:
 ```bash
 cargo test --test test_integration
+```
+
+Run CLI tests:
+```bash
+cargo test --test test_cli
 ```
 
 ### Librosa Compatibility Tests
@@ -106,6 +112,19 @@ Full pipeline tests with various combinations:
 - ✓ Custom frequency ranges
 - ✓ Complex multi-frequency signals
 - ✓ Short (0.1s) and long (10s) audio
+
+### CLI Tests (`test_cli.rs`)
+
+Command-line interface tests:
+- ✓ Single file with default output (same directory)
+- ✓ Single file with custom output directory (`--output-dir`)
+- ✓ Directory input with default output
+- ✓ Directory input with custom output directory (preserves structure)
+- ✓ Nested directory structure preservation
+- ✓ CLI parameters with output directory (resampling, mel, colormap)
+- ✓ Non-WAV files are ignored in directory processing
+- ✓ Parent directories are created automatically
+- ✓ Error handling for non-existent input files
 
 ### Librosa Compatibility Tests (`test_librosa_compatibility.rs`)
 
