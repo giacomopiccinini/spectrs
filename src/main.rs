@@ -66,6 +66,7 @@ pub struct Cli {
 }
 
 /// Create spectrogram for a single file (uses parallel spectrogram computation)
+#[allow(clippy::too_many_arguments)]
 fn par_create_spectrogram(
     input: &Path,
     output: &Path,
@@ -86,14 +87,15 @@ fn par_create_spectrogram(
         read_audio_file_mono(input).with_context(|| "Failed to read audio")?;
 
     // Resample if necessary
-    let target_sr;
-    if sr.is_some() && sr.unwrap() != original_sr {
-        audio = resample(audio, original_sr, sr.unwrap())
-            .with_context(|| "Failed to resample audio")?;
-        target_sr = sr.unwrap();
-    } else {
-        target_sr = original_sr;
-    }
+    let target_sr = match sr {
+        Some(sample_rate) if sample_rate != original_sr => {
+            audio = resample(audio, original_sr, sample_rate)
+                .with_context(|| "Failed to resample audio")?;
+            sample_rate
+        }
+        Some(sample_rate) => sample_rate,
+        None => original_sr,
+    };
 
     // Create spectrogram (parallelized over frames)
     let mut spec =
@@ -119,6 +121,7 @@ fn par_create_spectrogram(
 }
 
 /// Create spectrogram for batch processing (uses sequential spectrogram computation)
+#[allow(clippy::too_many_arguments)]
 fn create_spectrogram(
     input: &Path,
     output: &Path,
@@ -139,14 +142,15 @@ fn create_spectrogram(
         read_audio_file_mono(input).with_context(|| "Failed to read audio")?;
 
     // Resample if necessary
-    let target_sr;
-    if sr.is_some() && sr.unwrap() != original_sr {
-        audio = resample(audio, original_sr, sr.unwrap())
-            .with_context(|| "Failed to resample audio")?;
-        target_sr = sr.unwrap();
-    } else {
-        target_sr = original_sr;
-    }
+    let target_sr = match sr {
+        Some(sample_rate) if sample_rate != original_sr => {
+            audio = resample(audio, original_sr, sample_rate)
+                .with_context(|| "Failed to resample audio")?;
+            sample_rate
+        }
+        Some(sample_rate) => sample_rate,
+        None => original_sr,
+    };
 
     // Create spectrogram (sequential - parallelism is at file level)
     let mut spec = compute_spectrogram(&audio, n_fft, hop_length, win_length, center, spec_type);
@@ -216,10 +220,10 @@ fn main() -> Result<()> {
 
     // Case of single input file - use parallel spectrogram computation
     if input.is_file() && input.extension().and_then(|ext| ext.to_str()) == Some("wav") {
-        let output = compute_output_path(&input, &input, args.output_dir.as_deref())?;
+        let output = compute_output_path(input, input, args.output_dir.as_deref())?;
 
         par_create_spectrogram(
-            &input,
+            input,
             &output,
             args.sr,
             args.n_fft,
@@ -250,7 +254,7 @@ fn main() -> Result<()> {
                 let output = compute_output_path(file, input, args.output_dir.as_deref())?;
 
                 create_spectrogram(
-                    &file,
+                    file,
                     &output,
                     args.sr,
                     args.n_fft,
