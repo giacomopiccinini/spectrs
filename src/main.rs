@@ -102,12 +102,12 @@ fn par_create_spectrogram(
         par_compute_spectrogram(&audio, n_fft, hop_length, win_length, center, spec_type);
 
     // Convert to mel if necessary (parallelized over mel bands)
-    if n_mels.is_some() {
+    if let Some(n_mels_value) = n_mels {
         spec = par_convert_to_mel(
             &spec,
             target_sr,
             n_fft,
-            n_mels.unwrap(),
+            n_mels_value,
             f_min,
             f_max,
             mel_scale,
@@ -156,12 +156,12 @@ fn create_spectrogram(
     let mut spec = compute_spectrogram(&audio, n_fft, hop_length, win_length, center, spec_type);
 
     // Convert to mel if necessary (sequential - parallelism is at file level)
-    if n_mels.is_some() {
+    if let Some(n_mels_value) = n_mels {
         spec = convert_to_mel(
             &spec,
             target_sr,
             n_fft,
-            n_mels.unwrap(),
+            n_mels_value,
             f_min,
             f_max,
             mel_scale,
