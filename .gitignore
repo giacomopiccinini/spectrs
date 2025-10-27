@@ -1,7 +1,6 @@
 *.wav
 *.csv
 *.json
-*.png
 python/
 main.py
 
